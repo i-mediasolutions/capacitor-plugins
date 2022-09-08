@@ -1,8 +1,10 @@
-package com.capacitorjs.plugins.share;
+package nl.imediasolutions.capacitor.share;
 
 import android.app.Activity;
 import android.app.PendingIntent;
 import android.content.*;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.webkit.MimeTypeMap;
@@ -15,6 +17,7 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.util.List;
 
 @CapacitorPlugin(name = "Share")
 public class SharePlugin extends Plugin {
@@ -27,12 +30,12 @@ public class SharePlugin extends Plugin {
     @Override
     public void load() {
         broadcastReceiver =
-            new BroadcastReceiver() {
-                @Override
-                public void onReceive(Context context, Intent intent) {
-                    chosenComponent = intent.getParcelableExtra(Intent.EXTRA_CHOSEN_COMPONENT);
-                }
-            };
+                new BroadcastReceiver() {
+                    @Override
+                    public void onReceive(Context context, Intent intent) {
+                        chosenComponent = intent.getParcelableExtra(Intent.EXTRA_CHOSEN_COMPONENT);
+                    }
+                };
         getActivity().registerReceiver(broadcastReceiver, new IntentFilter(Intent.EXTRA_CHOSEN_COMPONENT));
     }
 
@@ -93,13 +96,26 @@ public class SharePlugin extends Plugin {
                 intent.setType(type);
                 try {
                     Uri fileUrl = FileProvider.getUriForFile(
-                        getActivity(),
-                        getContext().getPackageName() + ".fileprovider",
-                        new File(Uri.parse(url).getPath())
+                            getActivity(),
+                            getContext().getPackageName() + ".fileprovider",
+                            new File(Uri.parse(url).getPath())
                     );
                     intent.putExtra(Intent.EXTRA_STREAM, fileUrl);
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                         intent.setDataAndType(fileUrl, type);
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        List<ResolveInfo> resInfoList =
+                                this.getContext().getPackageManager().queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY);
+                        for (ResolveInfo resolveInfo : resInfoList) {
+                            String packageName = resolveInfo.activityInfo.packageName;
+                            this.getContext()
+                                    .grantUriPermission(
+                                            packageName,
+                                            fileUrl,
+                                            Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    );
+                        }
                     }
                 } catch (Exception ex) {
                     call.reject(ex.getLocalizedMessage());
